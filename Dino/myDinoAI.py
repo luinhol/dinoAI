@@ -8,7 +8,7 @@ pygame.init()
 
 # Valid values: HUMAN_MODE or AI_MODE
 GAME_MODE = "AI_MODE"
-RENDER_GAME = True
+RENDER_GAME = False
 
 # Global Constants
 SCREEN_HEIGHT = 600
@@ -220,6 +220,8 @@ def first(x):
 def sigmoid(x):
 	return 1/(1 + np.exp(-x))
 
+obstacle_name = {"LargeCactus": 0, "SmallCactus": 1, "Bird": 2}
+
 class MyKeyClassifier(KeyClassifier):
     def __init__(self, state):
         self.weights = state
@@ -228,9 +230,18 @@ class MyKeyClassifier(KeyClassifier):
         self.matriz_pesos_2_camada = self.weights[28:32].reshape(1,4)
 
     def keySelector(self, distance, obHeight, speed, obType, nextObDistance, nextObHeight, nextObType):
+        
+        if (isinstance(obType, int)):
+            obType = -1
+        else:
+            obType = obstacle_name[type(obType).__name__]
+            
+        if (isinstance(nextObType, int)):
+            nextObType = -1
+        else:
+            nextObType = obstacle_name[type(nextObType).__name__]
+            
         saida_neuronios_entrada = np.array([distance, obHeight, speed, obType, nextObDistance, nextObHeight, nextObType])
-        print(saida_neuronios_entrada)
-        print(obType)
         
         coluna_entradas = saida_neuronios_entrada.reshape(7,1)
 
@@ -405,6 +416,69 @@ def generate_neighborhood(state):
     return neighborhood
 
 
+
+def Swarm():
+    
+    def __init__(self, n_particles, n_weights, melhor_posicao_particula, melhor_posicao_enxame):
+        self.n_particles = n_particles
+        
+        self.posicao = np.random.rand(n_particles, n_weights) * 2 - 1
+        self.velocidade = np.random.rand(n_particles, n_weights) * 2 - 1
+        
+        self.r1 = np.random.rand(n_particles) * 2 - 1
+        self.r2 = np.random.rand(n_particles) * 2 - 1
+        
+        self.melhor_posicao_particula = melhor_posicao_particula
+        self.melhor_posicao_enxame = melhor_posicao_enxame
+        
+        self.w = 1
+        self.c1 = 1.2
+        self.c2 = 1.2
+                
+    def update_swarm(self):
+        
+        
+        for i in range(self.n_particles):
+            self.pop[i].update_vel(self.best)
+            self.pop[i].update_pos(Swarm.max_size, Swarm.items)
+            self.pop[i].update_local_optima(Swarm.items)
+            
+    def update_global_optima(self):
+        for i in range(Swarm.pop_size):
+            s, v = self.pop[i].get_local_optima()
+            if v > self.best_val:
+                self.best = s
+                self.best_val = v
+                
+    def get_population(self):
+        popul = []
+        for i in range(Swarm.pop_size):
+            popul.append(self.pop[i].get_pos())
+        return popul             
+                
+    def get_global_optima(self):
+        return self.best, self.best_val
+
+def pso (max_size, items, pop_size, max_iter, max_time):
+    start = time.process_time()
+    itera = 0    
+    end = 0
+    pop = Swarm(max_size, items, pop_size)
+    
+    conv = convergent(pop.get_population())
+
+    while not conv and itera < max_iter and end-start <= max_time:   
+               
+        pop.update_swarm()
+        pop.update_global_optima()
+        conv = convergent(pop.get_population())
+        itera+=1
+        end = time.process_time()
+    
+    best, best_val = pop.get_global_optima()
+    return best, state_size(best, items), best_val, itera, conv
+    
+
 # Gradiente Ascent
 def gradient_ascent(state, max_time):
     start = time.process_time()
@@ -443,7 +517,9 @@ def main():
     weights = np.random.random(size=32) * 2 - 1
     
     aiPlayer = MyKeyClassifier(weights)
-    best_weights, best_value = gradient_ascent(weights, 5000)
+    
+    best_weights, best_value = pso(weights, 5000)
+    
     aiPlayer = MyKeyClassifier(best_weights)
     res, value = manyPlaysResults(30)
     npRes = np.asarray(res)
