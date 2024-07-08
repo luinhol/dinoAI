@@ -3,12 +3,16 @@ import os
 import random
 import time
 from sys import exit
+from scipy import stats
+import numpy as np
+from scipy.special import expit
+from sklearn.preprocessing import normalize
 
 pygame.init()
 
 # Valid values: HUMAN_MODE or AI_MODE
 GAME_MODE = "AI_MODE"
-RENDER_GAME = True
+RENDER_GAME = False
 
 # Global Constants
 SCREEN_HEIGHT = 600
@@ -221,17 +225,14 @@ class KeyClassifier:
 def first(x):
     return x[0]
 
-def sigmoid(x):
-	return 1/(1 + np.exp(-x))
-
 obstacle_name = {"LargeCactus": 0, "SmallCactus": 1, "Bird": 2}
 
 class MyKeyClassifier(KeyClassifier):
     def __init__(self, state):
-        # self.weights = state
-        
         self.matriz_pesos_1_camada = state[0:28].reshape(4,7)
         self.matriz_pesos_2_camada = state[28:32].reshape(1,4)
+        # self.matriz_pesos_1_camada = state[0:16].reshape(4,4)
+        # self.matriz_pesos_2_camada = state[16:20].reshape(1,4)
 
     def keySelector(self, distance, obHeight, speed, obType, nextObDistance, nextObHeight, nextObType):
         
@@ -246,8 +247,10 @@ class MyKeyClassifier(KeyClassifier):
             nextObType = obstacle_name[type(nextObType).__name__]
             
         saida_neuronios_entrada = np.array([distance, obHeight, speed, obType, nextObDistance, nextObHeight, nextObType])
+        # saida_neuronios_entrada = np.array([distance, obHeight, speed, obType])
         
         coluna_entradas = saida_neuronios_entrada.reshape(7,1)
+        # coluna_entradas = saida_neuronios_entrada.reshape(4,1)
 
         # saida linear dos neuronios intermediarios e o produto entre a matriz de pesos da 1 camada e o vetor coluna de entrada
         saida_linear_neuronios_intermediarios = np.dot(self.matriz_pesos_1_camada, coluna_entradas)
@@ -257,7 +260,7 @@ class MyKeyClassifier(KeyClassifier):
         # saida linear do neuronio de saida e o produto entre a matriz de pesos da 2 camada e o vetor com a saida dos neuronios intermediarios
         saida_linear_neuronio_saida = np.dot(self.matriz_pesos_2_camada, saida_ativacao_neuronios_intermediarios)
         # saida de ativacao do neuronio de saida e a funcao sigmoid aplicada a saida linear
-        saida_ativacao_neuronio_saida = sigmoid(saida_linear_neuronio_saida)
+        saida_ativacao_neuronio_saida = expit(saida_linear_neuronio_saida)
                                 
         # se a saida linear do neuronio de saida for superior a 0.55, o dinossauro pula
         if (saida_ativacao_neuronio_saida >= 0.55):
@@ -281,34 +284,34 @@ def convergent(population):
 
 class Swarm():
     def __init__(self, n_particles, n_weights, melhor_pontuacao_enxame, melhor_posicao_enxame):
-        global aiPlayer
         self.n_particles = n_particles
         
         # gera um vetor posicao e um velocidade com valores aleatorios entre -1 e 1
+        # self.posicao = np.random.rand(n_particles, n_weights) * 2 - 1
+        # self.velocidade = np.random.rand(n_particles, n_weights) * 2 - 1
+        
+        
         self.posicao = np.random.rand(n_particles, n_weights) * 2 - 1
         self.velocidade = np.random.rand(n_particles, n_weights) * 2 - 1
         
         # declara variaveis com as melhores posicoes e pontuacoes das particulas, alem da melhor pontuacao do enxame
-        self.melhor_posicao_particula = self.posicao
+        self.melhor_posicao_particula = self.posicao.copy()
         self.melhor_pontuacao_particula = [0] * n_particles
         self.melhor_pontuacao_enxame = melhor_pontuacao_enxame
-        self.melhor_posicao_enxame = melhor_posicao_enxame
+        self.melhor_posicao_enxame = melhor_posicao_enxame.copy()
+                
+        # cria um classificador com os pesos (posicao) do individuo 1, e testa o jogo com ele
+        weights = self.posicao.copy()
+        results  = manyPlaysResultsTrain(3, weights)
         
-        # roda n classificadores com as posicoes
-        results = []
+        # se a pontuacao dessa particula foi a melhor dela ate o momento, salva no vetor de melhor pontuacao (como esta iniciando, com certeza vai ser)
+        self.melhor_pontuacao_particula = results.copy()
+            
         for i in range(self.n_particles):
-            # cria um classificador com os pesos (posicao) do individuo 1, e testa o jogo com ele
-            aiPlayer = MyKeyClassifier(self.posicao[i])
-            results += [playGame()]
-            
-            # se a pontuacao dessa particula foi a melhor dela ate o momento, salva no vetor de melhor pontuacao (como esta iniciando, com certeza vai ser)
-            if results[i] > self.melhor_pontuacao_particula[i]:
-                self.melhor_pontuacao_particula[i] = results[i]
-            
             # se a pontuacao dessa particula foi a melhor do enxame ate agora, salva na variavel do enxame
-            if results[i] > self.melhor_pontuacao_enxame:
-                self.melhor_posicao_enxame = self.posicao[i]
-                self.melhor_pontuacao_enxame = results[i]
+            if self.melhor_pontuacao_particula[i] > self.melhor_pontuacao_enxame:
+                self.melhor_posicao_enxame = self.posicao[i].copy()
+                self.melhor_pontuacao_enxame = self.melhor_pontuacao_particula[i]
         
         # salva coeficientes usados no calculo de velocidade
         self.w = 1
@@ -316,40 +319,48 @@ class Swarm():
         self.c2 = 1.2
                 
     def update_swarm(self):
+        # print("posicao", self.posicao)
         # cria dois vetores do tamanho do numero de particulas com valores aleatorios entre 0 e 1
         r1 = np.random.rand(self.n_particles)
         r2 = np.random.rand(self.n_particles)
         
         # atualiza vetor de velocidades
-        self.velocidade = (self.w * self.velocidade) + np.dot((self.c1 * r1) , (self.melhor_posicao_particula - self.posicao)) + np.dot((self.c2 * r2) , (self.melhor_posicao_enxame - self.posicao))
+        self.velocidade = np.dot(self.w,self.velocidade) + ((self.melhor_posicao_particula - self.posicao) * np.dot(self.c1, r1)[:, np.newaxis]) + ((self.melhor_posicao_enxame - self.posicao) * np.dot(self.c2, r2)[:, np.newaxis])
+        # self.velocidade = (self.w * self.velocidade) + np.dot((self.c1 * r1) , (self.melhor_posicao_particula - self.posicao)) + np.dot((self.c2 * r2) , (self.melhor_posicao_enxame - self.posicao))
+        
+        self.velocidade = np.clip(self.velocidade, -10, 10)
         
         # atualiza vetor posicoes
         self.posicao = self.posicao + self.velocidade
+        # print("posicao", self.posicao)
         
         # roda n classificadores com as posicoes
-        results = []
+        # results = []
+        # weights = normalize(self.posicao, norm="max")
+        weights = self.posicao.copy()
+        results = manyPlaysResultsTrain(3, weights)
+        # print("results", results)
+        
         for i in range(self.n_particles):
             # cria um classificador com os pesos (posicao) do individuo 1, e testa o jogo com ele
-            aiPlayer = MyKeyClassifier(self.posicao[i])
-            results += [playGame()]
+            # aiPlayer = MyKeyClassifier(self.posicao[i])
             
             # se a pontuacao dessa particula foi a melhor dela ate o momento, salva no vetor de melhor pontuacao
             if results[i] > self.melhor_pontuacao_particula[i]:
-                self.melhor_posicao_particula[i] = self.posicao[i]
+                self.melhor_posicao_particula[i] = self.posicao[i].copy()
                 self.melhor_pontuacao_particula[i] = results[i]
             
             # se a pontuacao dessa particula foi a melhor do enxame ate agora, salva na variavel do enxame
             if results[i] > self.melhor_pontuacao_enxame:
-                self.melhor_posicao_enxame = self.posicao[i]
+                self.melhor_posicao_enxame = self.posicao[i].copy()
                 self.melhor_pontuacao_enxame = results[i]
                 
-        # print(self.melhor_pontuacao_particula)
         
     def get_population(self):
-        return self.posicao    
+        return self.posicao.copy()
     
     def get_global_optima(self):
-        return self.melhor_posicao_enxame, self.melhor_pontuacao_enxame
+        return self.melhor_posicao_enxame.copy(), self.melhor_pontuacao_enxame
 
 def pso(n_particles, n_weights, max_iter, max_time, melhor_pontuacao_enxame, melhor_posicao_enxame):
     start = time.process_time()
@@ -361,8 +372,8 @@ def pso(n_particles, n_weights, max_iter, max_time, melhor_pontuacao_enxame, mel
     
     conv = convergent(enxame.get_population())
 
-    # enquanto nao atingiu tempo ou iteracao maxima
-    while not conv and itera < max_iter and end-start <= max_time:
+    # enquanto nao convergiu, atingiu tempo ou iteracao maxima
+    while not conv and itera < max_iter/10 and end-start <= max_time/200:
         enxame.update_swarm()
         
         # verifica se o valor convergiu
@@ -372,30 +383,37 @@ def pso(n_particles, n_weights, max_iter, max_time, melhor_pontuacao_enxame, mel
         end = time.process_time()
         
         melhor_posicao_enxame, melhor_pontuacao_enxame = enxame.get_global_optima()
-        # print(itera, melhor_pontuacao_enxame)
+        print("iteracao:", itera, " melhor pontuacao:", melhor_pontuacao_enxame, " tempo:", end-start)
     
     melhor_posicao_enxame, melhor_pontuacao_enxame = enxame.get_global_optima()
-    return melhor_posicao_enxame, melhor_pontuacao_enxame, itera
+    return melhor_posicao_enxame.copy(), melhor_pontuacao_enxame, itera
 
 def learn(n_particles, n_weights, max_iter, max_time):
     start = time.process_time()
     itera = 0    
     end = 0
     
-    melhor_posicao_geral = [-1272.58282106, -2845.58559524,  2357.60281527,  3911.51076505, -3784.28602562, -2957.75506017,  -735.84278109,  4538.56006056, -1548.18511497, -3425.40120875,  1697.87419428, -5680.44135824, -5196.26402552, -5353.53719787,  5830.42191092, -2345.77053455,  -496.02052766, -1012.30218954,  -798.79272132, -1550.01687044, -4930.44128365,  2758.87220364, -1116.10578887,  -208.14986269,  3389.13311515,   965.7272339 , -4517.36409585, -4688.29764941,  5093.61943934, -5123.24959024, -3336.22529853, -1714.70259365]
+    # melhor_posicao_geral = np.array([-5.5747902, -4.34080708, -1.07135268, -5.65339635, -1.14022635,
+    #                         1.35129083, 22.3786579, -5.1022398, -4.62575887, -1.92252924,
+    #                         -6.25952651, -21.37749674, -4.59973041, 0.73932804, -0.71396757,
+    #                         -22.83032348, 2.39480565, 10.34819655, -0.76261333, 1.28879508])
     
-    melhor_pontuacao_geral = 427.25
+    # melhor_pontuacao_geral = 1240.4134557828877
+    
+    melhor_posicao_geral = []
+    melhor_pontuacao_geral = 0
 
     # enquanto nao atingiu tempo ou iteracao maxima
     while itera < max_iter and end-start <= max_time:
-        
+        print(" populacao", itera+1)
         melhor_posicao_enxame, melhor_pontuacao_enxame, iter = pso(n_particles, n_weights, max_iter, max_time, melhor_pontuacao_geral, melhor_posicao_geral)
         
         if (melhor_pontuacao_enxame > melhor_pontuacao_geral):
             melhor_pontuacao_geral = melhor_pontuacao_enxame
-            melhor_posicao_geral = melhor_posicao_enxame
+            melhor_posicao_geral = melhor_posicao_enxame.copy()
         
-        print(itera, melhor_pontuacao_geral, np.array2string(melhor_posicao_geral, separator=', ', max_line_width = 999999999), melhor_pontuacao_enxame, )
+        print(melhor_pontuacao_geral, melhor_posicao_geral, melhor_pontuacao_enxame)
+        # print(melhor_pontuacao_geral, np.array2string(melhor_posicao_geral, separator=', ', max_line_width = 999999999), melhor_pontuacao_enxame)
         itera+=1
         end = time.process_time()
     
@@ -543,10 +561,6 @@ def playGame(solutions):
 
     return solution_fitness
 
-
-from scipy import stats
-import numpy as np
-
 def manyPlaysResultsTrain(rounds,solutions):
     results = []
 
@@ -571,6 +585,7 @@ def manyPlaysResultsTest(rounds,best_solution):
 def main():
     global aiPlayer
     
+    n_weights = 20
     n_weights = 32
     n_particles = 100
     max_iter = 1000
@@ -578,7 +593,9 @@ def main():
     
     best_weights, best_value, itera = learn(n_particles, n_weights, max_iter, max_time)
     
+    # best_weights = normalize(best_weights, norm="max")
     res, value = manyPlaysResultsTest(30, best_weights)
+    
     npRes = np.asarray(res)
     print(res, npRes.mean(), npRes.std(), value)
 
