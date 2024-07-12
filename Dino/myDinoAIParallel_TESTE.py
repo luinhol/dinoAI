@@ -12,7 +12,7 @@ pygame.init()
 
 # Valid values: HUMAN_MODE or AI_MODE
 GAME_MODE = "AI_MODE"
-RENDER_GAME = False
+RENDER_GAME = True
 
 # Global Constants
 SCREEN_HEIGHT = 600
@@ -284,37 +284,25 @@ def convergent(population):
 
 class Swarm():
     def __init__(self, n_particles, n_weights, melhor_pontuacao_enxame, melhor_posicao_enxame):
-        # salva coeficientes usados no calculo de velocidade
-        self.w = 1
-        self.c1 = 2.05
-        self.c2 = 2.05
-        self.x = 0.72984 # coeficiente de constricao
-        
         self.n_particles = n_particles
         
         # gera um vetor posicao e um velocidade com valores aleatorios entre -1 e 1
         # self.posicao = np.random.rand(n_particles, n_weights) * 2 - 1
         # self.velocidade = np.random.rand(n_particles, n_weights) * 2 - 1
         
-        # intervalo_min = np.finfo(np.float32).min
-        # intervalo_max = np.finfo(np.float32).max
         
-        intervalo_max = 5.12
-        intervalo_min = -5.12
-        
-        self.posicao = np.random.uniform(intervalo_min, intervalo_max, size=(n_particles, n_weights))
-        # self.velocidade = np.random.uniform(intervalo_min, intervalo_max, size=(n_particles, n_weights))
+        self.posicao = np.random.rand(n_particles, n_weights) * 2 - 1
+        self.velocidade = np.random.rand(n_particles, n_weights) * 2 - 1
         
         # declara variaveis com as melhores posicoes e pontuacoes das particulas, alem da melhor pontuacao do enxame
         self.melhor_posicao_particula = self.posicao.copy()
         self.melhor_pontuacao_particula = [0] * n_particles
         self.melhor_pontuacao_enxame = melhor_pontuacao_enxame
         self.melhor_posicao_enxame = melhor_posicao_enxame.copy()
-                           
+                
         # cria um classificador com os pesos (posicao) do individuo 1, e testa o jogo com ele
         weights = self.posicao.copy()
-        weights = normalize(weights, norm="max")
-        results = manyPlaysResultsTrain(10, weights)
+        results  = manyPlaysResultsTrain(3, weights)
         
         # se a pontuacao dessa particula foi a melhor dela ate o momento, salva no vetor de melhor pontuacao (como esta iniciando, com certeza vai ser)
         self.melhor_pontuacao_particula = results.copy()
@@ -325,61 +313,49 @@ class Swarm():
                 self.melhor_posicao_enxame = self.posicao[i].copy()
                 self.melhor_pontuacao_enxame = self.melhor_pontuacao_particula[i]
         
-        r1 = np.random.rand(self.n_particles)
-        r2 = np.random.rand(self.n_particles)
-        
-        self.velocidade = self.x * (0 + ((self.melhor_posicao_particula - self.posicao) * np.dot(self.c1, r1)[:, np.newaxis]) + ((self.melhor_posicao_enxame - self.posicao) * np.dot(self.c2, r2)[:, np.newaxis]))
-        
-        # LIMITA VELOCIDADE
-        self.velocidade = np.clip(self.velocidade, -5.12, 5.12)
-        
-        # self.w = 0.729
-        # self.c1 = 1.49445
-        # self.c2 = 1.49445
+        # salva coeficientes usados no calculo de velocidade
+        self.w = 1
+        self.c1 = 1.2
+        self.c2 = 1.2
                 
     def update_swarm(self):
-        # diminui o valor da inercia das particulas a cada iteracao
-        # self.w = self.w - 0.005
-        
+        # print("posicao", self.posicao)
         # cria dois vetores do tamanho do numero de particulas com valores aleatorios entre 0 e 1
         r1 = np.random.rand(self.n_particles)
         r2 = np.random.rand(self.n_particles)
         
         # atualiza vetor de velocidades
-        self.velocidade = self.x * (self.velocidade + ((self.melhor_posicao_particula - self.posicao) * np.dot(self.c1, r1)[:, np.newaxis]) + ((self.melhor_posicao_enxame - self.posicao) * np.dot(self.c2, r2)[:, np.newaxis]))
-        # self.velocidade = np.dot(self.w,self.velocidade) + ((self.melhor_posicao_particula - self.posicao) * np.dot(self.c1, r1)[:, np.newaxis]) + ((self.melhor_posicao_enxame - self.posicao) * np.dot(self.c2, r2)[:, np.newaxis])
-        # self.velocidade = (self.w * self.velocidade +
-        #                    self.c1 * r1[:, np.newaxis] * (self.melhor_posicao_particula - self.posicao) +
-        #                    self.c2 * r2[:, np.newaxis] * (self.melhor_posicao_enxame - self.posicao))
+        self.velocidade = np.dot(self.w,self.velocidade) + ((self.melhor_posicao_particula - self.posicao) * np.dot(self.c1, r1)[:, np.newaxis]) + ((self.melhor_posicao_enxame - self.posicao) * np.dot(self.c2, r2)[:, np.newaxis])
+        # self.velocidade = (self.w * self.velocidade) + np.dot((self.c1 * r1) , (self.melhor_posicao_particula - self.posicao)) + np.dot((self.c2 * r2) , (self.melhor_posicao_enxame - self.posicao))
         
-        # print(self.velocidade)
-        # LIMITA VELOCIDADE
-        self.velocidade = np.clip(self.velocidade, -5.12, 5.12)
+        self.velocidade = np.clip(self.velocidade, -10, 10)
         
         # atualiza vetor posicoes
         self.posicao = self.posicao + self.velocidade
-        
-        self.posicao = np.clip(self.posicao, -5.12, 5.12)
         # print("posicao", self.posicao)
         
         # roda n classificadores com as posicoes
         # results = []
+        # weights = normalize(self.posicao, norm="max")
         weights = self.posicao.copy()
-        weights = normalize(weights, norm="max")
-        results = manyPlaysResultsTrain(10, weights)
+        results = manyPlaysResultsTrain(3, weights)
+        # print("results", results)
         
-        for i in range(self.n_particles):            
+        for i in range(self.n_particles):
+            # cria um classificador com os pesos (posicao) do individuo 1, e testa o jogo com ele
+            # aiPlayer = MyKeyClassifier(self.posicao[i])
+            
             # se a pontuacao dessa particula foi a melhor dela ate o momento, salva no vetor de melhor pontuacao
             if results[i] > self.melhor_pontuacao_particula[i]:
                 self.melhor_posicao_particula[i] = self.posicao[i].copy()
                 self.melhor_pontuacao_particula[i] = results[i]
+            
+            # se a pontuacao dessa particula foi a melhor do enxame ate agora, salva na variavel do enxame
+            if results[i] > self.melhor_pontuacao_enxame:
+                self.melhor_posicao_enxame = self.posicao[i].copy()
+                self.melhor_pontuacao_enxame = results[i]
                 
-                # se a pontuacao dessa particula foi a melhor do enxame ate agora, salva na variavel do enxame
-                if results[i] > self.melhor_pontuacao_enxame:
-                    self.melhor_posicao_enxame = self.posicao[i].copy()
-                    self.melhor_pontuacao_enxame = results[i]
-            
-            
+        
     def get_population(self):
         return self.posicao.copy()
     
@@ -408,7 +384,6 @@ def pso(n_particles, n_weights, max_iter, max_time, melhor_pontuacao_enxame, mel
         
         melhor_posicao_enxame, melhor_pontuacao_enxame = enxame.get_global_optima()
         print("iteracao:", itera, " melhor pontuacao:", melhor_pontuacao_enxame, " tempo:", end-start)
-        # print(" posicoes: ", enxame.get_population()[:5])
     
     melhor_posicao_enxame, melhor_pontuacao_enxame = enxame.get_global_optima()
     return melhor_posicao_enxame.copy(), melhor_pontuacao_enxame, itera
@@ -418,17 +393,10 @@ def learn(n_particles, n_weights, max_iter, max_time):
     itera = 0    
     end = 0
     
-#     [-5.09136589  1.85925724  1.17823087 -4.49853927 -2.83945926  0.45845361
-#  -3.62623546 -1.32612043 -0.15870387  0.1521826   3.60043619 -0.46355249
-#  -1.53793677  1.91975924  2.09825115  0.56794148  2.09564697 -5.12
-#   0.82413077  5.12      ] 1011.657742530267
-    
-        #     [ 2.13615242e+38  8.09188746e+36 -6.52065424e+38 -6.57366419e+37
-        #   2.83849965e+38 -1.71694936e+38  2.70843965e+38 -9.01921476e+37
-        #  -8.27602015e+37  6.66644728e+37 -7.78601479e+38  2.20063448e+38
-        #   5.62104534e+37 -1.28236881e+38 -5.82169684e+38 -8.25111985e+38
-        #  -7.90739519e+38  5.95594755e+38 -1.79925248e+38 -1.11512143e+39]
-    # 1455.2995176016498
+    # melhor_posicao_geral = np.array([-5.5747902, -4.34080708, -1.07135268, -5.65339635, -1.14022635,
+    #                         1.35129083, 22.3786579, -5.1022398, -4.62575887, -1.92252924,
+    #                         -6.25952651, -21.37749674, -4.59973041, 0.73932804, -0.71396757,
+    #                         -22.83032348, 2.39480565, 10.34819655, -0.76261333, 1.28879508])
     
     # melhor_pontuacao_geral = 1240.4134557828877
     
@@ -617,14 +585,19 @@ def manyPlaysResultsTest(rounds,best_solution):
 def main():
     global aiPlayer
     
-    n_weights = 20
-    n_particles = 100
-    max_iter = 1000
-    max_time = 43200 # 12 horas
+    # n_weights = 20
+    # n_particles = 100
+    # max_iter = 1000
+    # max_time = 43200 # 12 horas
     
-    best_weights, best_value, itera = learn(n_particles, n_weights, max_iter, max_time)
+    # best_weights, best_value, itera = learn(n_particles, n_weights, max_iter, max_time)
     
-    best_weights = normalize(best_weights, norm="max")
+    best_weights = np.array([-5.5747902, -4.34080708, -1.07135268, -5.65339635, -1.14022635,
+                            1.35129083, 22.3786579, -5.1022398, -4.62575887, -1.92252924,
+                            -6.25952651, -21.37749674, -4.59973041, 0.73932804, -0.71396757,
+                            -22.83032348, 2.39480565, 10.34819655, -0.76261333, 1.28879508])
+    
+    # best_weights = normalize(best_weights, norm="max")
     res, value = manyPlaysResultsTest(30, best_weights)
     
     npRes = np.asarray(res)
