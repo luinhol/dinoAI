@@ -450,7 +450,7 @@ def pso(cost_func, n_particles, n_weights, max_iter, max_time, chi, c1, c2, w, b
         melhor_pontuacao_iteracao = enxame.get_iter_best_score()
         
         # escreve no terminal
-        print("iteracao:", itera, " melhor pontuacao iteracao:", melhor_pontuacao_iteracao, " melhor pontuacao enxame:", melhor_posicao_enxame," tempo:", end-start)
+        print("iteracao:", itera, " melhor pontuacao iteracao:", melhor_pontuacao_iteracao, " melhor pontuacao enxame:", melhor_pontuacao_enxame," tempo:", end-start)
         
         # escreve informacoes do enxame no arquivo de saida
         with open(arq_enxame, 'a') as f:
@@ -483,7 +483,14 @@ def learn(n_particles, n_weights, n_swarms, max_iter, max_time, chi, c1, c2, w, 
             melhor_pontuacao_geral = melhor_pontuacao_enxame
             melhor_posicao_geral = melhor_posicao_enxame.copy()
         
-        print(melhor_pontuacao_geral, melhor_posicao_geral, melhor_pontuacao_enxame)
+        
+        print("TREINO:\n","melhor_posicao_enxame:", melhor_posicao_enxame, "\nmelhor_pontuacao_geral:", melhor_pontuacao_enxame)
+
+        res, value = manyPlaysResultsTest(30, melhor_posicao_enxame)
+    
+        npRes = np.asarray(res)
+        print("TESTE\n", "res:", res, "\nmean:",npRes.mean(), " std:", npRes.std(), " val:", value)
+
         itera+=1
         end = time.process_time()
     
@@ -656,20 +663,21 @@ def main():
     global aiPlayer
         
     n_weights = 20
-    n_particles = 10
+    n_particles = 100
     n_swarms = 3
-    max_iter = 100
+    max_iter = 1000
     max_time = 43200 # 12 horas
-    boundaries = [-12, 12]
-    n_samples_train = 3
-    w = None
-    chi = 0.72984
+    boundaries = [-15, 15]
+    n_samples_train = 10
+    w = 1
+    chi = None
+    # chi = 0.72984
     # c1 = 1.49445
     # c2 = 1.49445
-    # c1 = 1.5
-    # c2 = 1.5
-    c1 = 2.05
-    c2 = 2.05
+    c1 = 1.5
+    c2 = 1.5
+    # c1 = 2.05
+    # c2 = 2.05
     
     print("boundaries:",boundaries, " n_samples:",n_samples_train)
     best_weights, best_value, itera = learn(n_particles= n_particles, n_weights= n_weights, n_swarms= n_swarms, max_iter= max_iter, max_time= max_time, chi= chi, c1= c1, c2= c2,w= w, boundaries= boundaries, n_samples_train= n_samples_train)
