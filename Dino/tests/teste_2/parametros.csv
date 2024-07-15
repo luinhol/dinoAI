@@ -1,0 +1,2 @@
+n_particles;n_weights;chi;c1;c2;w;boundaries[0];boundaries[1],n_samples_train
+35;20;0.72984;2.05;2.05;None;-12;12;10
