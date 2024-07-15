@@ -318,9 +318,10 @@ class Swarm():
         
         # declara variaveis com as melhores posicoes e pontuacoes das particulas, alem da melhor pontuacao do enxame
         self.melhor_posicao_particula = self.posicao.copy()
-        self.melhor_pontuacao_particula = self.cost_func(self.n_samples_train, weights)
-        self.melhor_posicao_enxame = melhor_posicao_enxame if len(melhor_posicao_enxame) != 0 else self.posicao[self.melhor_pontuacao_particula.argmax()].copy()
-        self.melhor_pontuacao_enxame = melhor_pontuacao_enxame if melhor_pontuacao_enxame != 0 else self.melhor_pontuacao_particula.max()
+        self.results = self.cost_func(self.n_samples_train, weights)
+        self.melhor_pontuacao_particula = self.results.copy()
+        self.melhor_posicao_enxame = self.posicao[self.melhor_pontuacao_particula.argmax()].copy()
+        self.melhor_pontuacao_enxame = self.melhor_pontuacao_particula.max()
         
                         
     def update_swarm(self):        
@@ -362,37 +363,74 @@ class Swarm():
         weights = self.posicao.copy()
         
         # aplica a funcao de custo (dino)
-        results = self.cost_func(self.n_samples_train, weights)
+        self.results = self.cost_func(self.n_samples_train, weights)
         
         # verifica se o a pontuacao supera a melhor pontuacao da particula
-        better_scores_index = results > self.melhor_pontuacao_particula
+        better_scores_index = self.results > self.melhor_pontuacao_particula
         # atualiza melhor posicao da particula
         self.melhor_posicao_particula[better_scores_index, :] = self.posicao[better_scores_index, :].copy()
         # atualiza melhor pontuacao da particula
-        self.melhor_pontuacao_particula[better_scores_index] = results[better_scores_index].copy()
+        self.melhor_pontuacao_particula[better_scores_index] = self.results[better_scores_index].copy()
 
-        # atualiza melhor posicao do enxame
-        if self.melhor_pontuacao_particula.max() > self.melhor_pontuacao_enxame:
-            print(self.melhor_posicao_particula[self.melhor_pontuacao_particula.argmax(), :])
+        # # atualiza melhor posicao do enxame
+        # if self.melhor_pontuacao_particula.max() > self.melhor_pontuacao_enxame:
+        #     print(self.melhor_posicao_particula[self.melhor_pontuacao_particula.argmax(), :])
             
         self.melhor_posicao_enxame = self.melhor_posicao_particula[self.melhor_pontuacao_particula.argmax(), :].copy()
         # atualiza melhor pontuacao do enxame
         self.melhor_pontuacao_enxame = self.melhor_pontuacao_particula.max()
-        
+    
+    def get_iter_best_score(self):
+        return self.results.max()
             
     def get_population(self):
         return self.posicao.copy()
     
     def get_global_optima(self):
         return self.melhor_posicao_enxame.copy(), self.melhor_pontuacao_enxame
+    
+def mount_dir(path):
+    arq_list = os.listdir(path)
 
-def pso(cost_func, n_particles, n_weights, max_iter, max_time, chi, c1, c2, w, boundaries, n_samples_train, melhor_pontuacao_enxame, melhor_posicao_enxame):
+    # conta apenas os arquivos (ignora diretorios)
+    n_arq = len(arq_list)
+    caminho_diretorio_teste = f'{path}teste_{n_arq+1}'
+    # verifica se o diretorio nao existe antes de criar
+    if not os.path.exists(f'{path}teste_{n_arq+1}/'):
+        os.makedirs(caminho_diretorio_teste)
+    
+    return caminho_diretorio_teste
+
+def pso(cost_func, n_particles, n_weights, max_iter, max_time, chi, c1, c2, w, boundaries, n_samples_train, melhor_pontuacao_enxame=None, melhor_posicao_enxame=None):
+
+    # monta diretorio saida do teste
+    path = './tests/'
+    diretorio = mount_dir(path)
+    
+    # escreve arquivo parametros
+    arq_parametros_teste = os.path.join(diretorio, 'parametros.csv')
+    # escreve cabecalho
+    with open(arq_parametros_teste, 'w') as f:
+        f.write('n_particles;n_weights;chi;c1;c2;w;boundaries[0];boundaries[1],n_samples_train\n')
+        f.write(f'{n_particles};{n_weights};{chi};{c1};{c2};{w};{boundaries[0]};{boundaries[1]};{n_samples_train}\n')
+       
+    # escreve cabecalho do arquivo do enxame 
+    arq_enxame = os.path.join(diretorio, 'enxame.csv')
+    # escreve cabecalho
+    with open(arq_enxame, 'w') as f:
+        f.write('itera;tmp_s;melhor_pontuacao_iteracao;melhor_pontuacao_enxame\n')
+    
     start = time.process_time()
     itera = 0    
     end = 0
     
     # gera enxame
-    enxame = Swarm(cost_func= cost_func, n_particles= n_particles, n_weights= n_weights, chi= chi, c1= c1, c2= c2, w = w, boundaries= boundaries, n_samples_train= n_samples_train, melhor_pontuacao_enxame= melhor_pontuacao_enxame, melhor_posicao_enxame= melhor_posicao_enxame)
+    enxame = Swarm(cost_func= cost_func, n_particles= n_particles, n_weights= n_weights, chi= chi, c1= c1, c2= c2, w = w, boundaries= boundaries, n_samples_train= n_samples_train)
+    
+    # escreve informacoes do enxame no arquivo de saida
+    with open(arq_enxame, 'a') as f:
+        melhor_posicao_enxame, melhor_pontuacao_enxame = enxame.get_global_optima()
+        f.write(f'{itera};{end};{melhor_pontuacao_enxame};{melhor_pontuacao_enxame}\n')
     
     # verifica se o enxame convergiu
     conv = convergent(enxame.get_population())
@@ -405,19 +443,29 @@ def pso(cost_func, n_particles, n_weights, max_iter, max_time, chi, c1, c2, w, b
         # verifica se o enxame convergiu
         conv = convergent(enxame.get_population())
         
-        # incrementa variaveis
-        itera+=1
+        # obtem tempo e as pontuacoes/posicoes
+        itera+=1    # incrementa iteracao
         end = time.process_time()
-        
-        # atualiza melhor posicao e imprime os resultados
         melhor_posicao_enxame, melhor_pontuacao_enxame = enxame.get_global_optima()
-        print("iteracao:", itera, " melhor pontuacao:", melhor_pontuacao_enxame, " tempo:", end-start)
+        melhor_pontuacao_iteracao = enxame.get_iter_best_score()
+        
+        # escreve no terminal
+        print("iteracao:", itera, " melhor pontuacao iteracao:", melhor_pontuacao_iteracao, " melhor pontuacao enxame:", melhor_posicao_enxame," tempo:", end-start)
+        
+        # escreve informacoes do enxame no arquivo de saida
+        with open(arq_enxame, 'a') as f:
+            f.write(f'{itera};{end-start};{melhor_pontuacao_iteracao};{melhor_pontuacao_enxame}\n')
     
-    # retorna os melhores resultados 
+    # retorna os melhores resultados
     melhor_posicao_enxame, melhor_pontuacao_enxame = enxame.get_global_optima()
+    
+    # salva os melhores pesos em um arquivo
+    np.savetxt(f'{diretorio}/pesos.txt', melhor_posicao_enxame)
+    
     return melhor_posicao_enxame.copy(), melhor_pontuacao_enxame, itera
 
 def learn(n_particles, n_weights, n_swarms, max_iter, max_time, chi, c1, c2, w, boundaries, n_samples_train):
+    
     start = time.process_time()
     itera = 0    
     end = 0
@@ -425,10 +473,11 @@ def learn(n_particles, n_weights, n_swarms, max_iter, max_time, chi, c1, c2, w, 
     melhor_posicao_geral = []
     melhor_pontuacao_geral = 0
 
-    # enquanto nao atingiu tempo ou iteracao maxima
+    # enquanto nao atingiu tempo ou iteracao numero maximo de enxames
     while itera < n_swarms and end-start <= max_time:
         print(" populacao", itera+1)
-        melhor_posicao_enxame, melhor_pontuacao_enxame, iter = pso(manyPlaysResultsTrain, n_particles, n_weights, max_iter, max_time, chi, c1, c2, w, boundaries, n_samples_train, melhor_pontuacao_geral, melhor_posicao_geral)
+            
+        melhor_posicao_enxame, melhor_pontuacao_enxame, iter = pso(manyPlaysResultsTrain, n_particles, n_weights, max_iter, max_time, chi, c1, c2, w, boundaries, n_samples_train)
         
         if (melhor_pontuacao_enxame > melhor_pontuacao_geral):
             melhor_pontuacao_geral = melhor_pontuacao_enxame
@@ -605,22 +654,22 @@ def manyPlaysResultsTest(rounds,best_solution):
 
 def main():
     global aiPlayer
-    
+        
     n_weights = 20
-    n_particles = 100
-    n_swarms = 1
-    max_iter = 1000
+    n_particles = 10
+    n_swarms = 3
+    max_iter = 100
     max_time = 43200 # 12 horas
     boundaries = [-12, 12]
-    n_samples_train = 10
-    w = 1
+    n_samples_train = 3
+    w = None
     chi = 0.72984
     # c1 = 1.49445
     # c2 = 1.49445
-    c1 = 1.5
-    c2 = 1.5
-    # c1 = 1.2
-    # c2 = 1.2
+    # c1 = 1.5
+    # c2 = 1.5
+    c1 = 2.05
+    c2 = 2.05
     
     print("boundaries:",boundaries, " n_samples:",n_samples_train)
     best_weights, best_value, itera = learn(n_particles= n_particles, n_weights= n_weights, n_swarms= n_swarms, max_iter= max_iter, max_time= max_time, chi= chi, c1= c1, c2= c2,w= w, boundaries= boundaries, n_samples_train= n_samples_train)
