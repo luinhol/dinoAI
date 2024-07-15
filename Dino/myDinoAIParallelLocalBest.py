@@ -225,17 +225,14 @@ class KeyClassifier:
 def first(x):
     return x[0]
 
-obstacle_name = {"SmallCactus": 0, "LargeCactus": 1, "Bird": 2}
+obstacle_name = {"LargeCactus": 0, "SmallCactus": 1, "Bird": 2}
 
 class MyKeyClassifier(KeyClassifier):
     def __init__(self, state):
-        # self.matriz_pesos_1_camada = state[0:24].reshape(4,6)
-        # self.matriz_pesos_2_camada = state[24:28].reshape(1,4)
         self.matriz_pesos_1_camada = state[0:16].reshape(4,4)
         self.matriz_pesos_2_camada = state[16:20].reshape(1,4)
 
     def keySelector(self, distance, obHeight, speed, obType, nextObDistance, nextObHeight, nextObType):
-        isBird, isLargeCactus, isSmallCactus = 0, 0, 0
         
         if (isinstance(obType, int)):
             obType = -1
@@ -245,18 +242,6 @@ class MyKeyClassifier(KeyClassifier):
         saida_neuronios_entrada = np.array([distance, obHeight, speed, obType])
         
         coluna_entradas = saida_neuronios_entrada.reshape(4,1)
-        
-        # obType = type(obType).__name__
-        # if obType == "Bird":
-        #     isBird = 1
-        # elif obType == "LargeCactus":
-        #     isLargeCactus = 1
-        # elif obType == "SmallCactus":
-        #     isSmallCactus = 1
-            
-        # saida_neuronios_entrada = np.array([distance, obHeight, speed, isBird, isLargeCactus, isSmallCactus])
-        
-        # coluna_entradas = saida_neuronios_entrada.reshape(6,1)
 
         # saida linear dos neuronios intermediarios e o produto entre a matriz de pesos da 1 camada e o vetor coluna de entrada
         saida_linear_neuronios_intermediarios = np.dot(self.matriz_pesos_1_camada, coluna_entradas)
@@ -289,7 +274,7 @@ def convergent(population):
         return True
 
 class Swarm():
-    def __init__(self, cost_func, n_particles, n_weights, chi= 0.72984, c1= 2.05, c2= 2.05, w=None, boundaries= None, n_samples_train= 10, melhor_pontuacao_enxame = None, melhor_posicao_enxame= None):
+    def __init__(self, cost_func, n_particles, n_weights, chi= 0.72984, c1= 2.05, c2= 2.05, boundaries= None, n_samples_train= 10, melhor_pontuacao_enxame = None, melhor_posicao_enxame= None):
         # salva coeficientes usados no calculo de velocidade
         self.cost_func = cost_func
         self.n_particles = n_particles
@@ -297,10 +282,9 @@ class Swarm():
         self.n_samples_train = n_samples_train
         self.boundaries = boundaries if boundaries else [-1.0, 1.0]
         
-        self.w = w
-        self.c1 = c1
-        self.c2 = c2
-        self.x = chi # coeficiente de constricao
+        self.c1 = 2.05
+        self.c2 = 2.05
+        self.x = 0.72984 # coeficiente de constricao
        
         self.posicao = np.random.uniform(low = self.boundaries[0], high= self.boundaries[1], size=(n_particles, n_weights))
         
@@ -314,13 +298,15 @@ class Swarm():
         )
         
         weights = self.posicao.copy()
-        # weights = normalize(weights, norm="max")
         
         # declara variaveis com as melhores posicoes e pontuacoes das particulas, alem da melhor pontuacao do enxame
         self.melhor_posicao_particula = self.posicao.copy()
         self.melhor_pontuacao_particula = self.cost_func(self.n_samples_train, weights)
-        self.melhor_posicao_enxame = melhor_posicao_enxame if len(melhor_posicao_enxame) != 0 else self.posicao[self.melhor_pontuacao_particula.argmax()].copy()
-        self.melhor_pontuacao_enxame = melhor_pontuacao_enxame if melhor_pontuacao_enxame != 0 else self.melhor_pontuacao_particula.max()
+        self.melhor_posicao_vizinho = np.roll(self.melhor_posicao_particula.copy(), self.n_weights)
+        self.melhor_pontuacao_vizinho = np.roll(self.melhor_pontuacao_particula.max(), 1)
+        
+        self.melhor_posicao_enxame = melhor_posicao_enxame if melhor_posicao_enxame else self.posicao[self.melhor_pontuacao_particula.argmax()]
+        self.melhor_pontuacao_enxame = melhor_pontuacao_enxame if melhor_pontuacao_enxame else self.melhor_pontuacao_particula.max()
         
                         
     def update_swarm(self):        
@@ -328,20 +314,12 @@ class Swarm():
         r1 = np.random.uniform(0, 1, size= (self.n_particles, 1)) 
         r2 = np.random.uniform(0, 1, size= (self.n_particles, 1))
         
-        if self.w is None:
-            # atualiza vetor de velocidades
-            self.velocidade = self.x * (
-                self.velocidade
-                + self.c1 * r1 * (self.melhor_posicao_particula - self.posicao)
-                + self.c2 * r2 * (self.melhor_posicao_enxame - self.posicao)
-            )
-        else:
-            # atualiza vetor de velocidades
-            self.velocidade = (
-                self.w * self.velocidade
-                + self.c1 * r1 * (self.melhor_posicao_particula - self.posicao)
-                + self.c2 * r2 * (self.melhor_posicao_enxame - self.posicao)
-            )
+        # atualiza vetor de velocidades
+        self.velocidade = self.x * (
+            self.velocidade
+            + self.c1 * r1 * (self.melhor_posicao_particula - self.posicao)
+            + self.c2 * r2 * (self.melhor_posicao_vizinho - self.posicao)
+        )
         
         # LIMITA VELOCIDADE
         self.velocidade = self.velocidade.clip(min= -self.vmax, max= self.vmax)
@@ -349,36 +327,27 @@ class Swarm():
         # atualiza vetor posicoes
         self.posicao = self.posicao + self.velocidade
         
-        # limita as posicoes para o espaco determinado
-        clip_pos = self.posicao.clip(min= self.boundaries[0], max= self.boundaries[1])
-        
-        # zera a velocidade quando uma particula colide com a parede
-        self.velocidade[np.absolute(self.posicao-clip_pos) > 0] = 0
-        
         # LIMITA POSICOES
-        self.posicao = clip_pos
+        self.posicao = self.posicao.clip(min= self.boundaries[0], max= self.boundaries[1])
         
-        # copia os pesos
         weights = self.posicao.copy()
         
-        # aplica a funcao de custo (dino)
         results = self.cost_func(self.n_samples_train, weights)
         
         # verifica se o a pontuacao supera a melhor pontuacao da particula
         better_scores_index = results > self.melhor_pontuacao_particula
         # atualiza melhor posicao da particula
-        self.melhor_posicao_particula[better_scores_index, :] = self.posicao[better_scores_index, :].copy()
+        self.melhor_posicao_particula[better_scores_index, :] = self.posicao[better_scores_index, :]
         # atualiza melhor pontuacao da particula
-        self.melhor_pontuacao_particula[better_scores_index] = results[better_scores_index].copy()
+        self.melhor_pontuacao_particula[better_scores_index] = results[better_scores_index]
 
+        self.melhor_posicao_vizinho = np.roll(self.melhor_posicao_particula.copy(), self.n_weights)
+        
+    
         # atualiza melhor posicao do enxame
-        if self.melhor_pontuacao_particula.max() > self.melhor_pontuacao_enxame:
-            print(self.melhor_posicao_particula[self.melhor_pontuacao_particula.argmax(), :])
-            
-        self.melhor_posicao_enxame = self.melhor_posicao_particula[self.melhor_pontuacao_particula.argmax(), :].copy()
+        self.melhor_posicao_enxame = self.melhor_posicao_particula[self.melhor_pontuacao_particula.argmax(), :]
         # atualiza melhor pontuacao do enxame
         self.melhor_pontuacao_enxame = self.melhor_pontuacao_particula.max()
-        
             
     def get_population(self):
         return self.posicao.copy()
@@ -386,38 +355,33 @@ class Swarm():
     def get_global_optima(self):
         return self.melhor_posicao_enxame.copy(), self.melhor_pontuacao_enxame
 
-def pso(cost_func, n_particles, n_weights, max_iter, max_time, chi, c1, c2, w, boundaries, n_samples_train, melhor_pontuacao_enxame, melhor_posicao_enxame):
+def pso(cost_func, n_particles, n_weights, max_iter, max_time, boundaries, n_samples_train, melhor_pontuacao_enxame, melhor_posicao_enxame):
     start = time.process_time()
     itera = 0    
     end = 0
     
     # gera enxame
-    enxame = Swarm(cost_func= cost_func, n_particles= n_particles, n_weights= n_weights, chi= chi, c1= c1, c2= c2, w = w, boundaries= boundaries, n_samples_train= n_samples_train, melhor_pontuacao_enxame= melhor_pontuacao_enxame, melhor_posicao_enxame= melhor_posicao_enxame)
+    enxame = Swarm(cost_func= cost_func, n_particles= n_particles, n_weights= n_weights, boundaries= boundaries, n_samples_train= n_samples_train, melhor_pontuacao_enxame= melhor_pontuacao_enxame, melhor_posicao_enxame= melhor_posicao_enxame)
     
-    # verifica se o enxame convergiu
     conv = convergent(enxame.get_population())
 
     # enquanto nao convergiu, atingiu tempo ou iteracao maxima
     while not conv and itera < max_iter and end-start <= max_time:
-        # atualiza o enxame
         enxame.update_swarm()
         
-        # verifica se o enxame convergiu
+        # verifica se o valor convergiu
         conv = convergent(enxame.get_population())
         
-        # incrementa variaveis
         itera+=1
         end = time.process_time()
         
-        # atualiza melhor posicao e imprime os resultados
         melhor_posicao_enxame, melhor_pontuacao_enxame = enxame.get_global_optima()
         print("iteracao:", itera, " melhor pontuacao:", melhor_pontuacao_enxame, " tempo:", end-start)
     
-    # retorna os melhores resultados 
     melhor_posicao_enxame, melhor_pontuacao_enxame = enxame.get_global_optima()
     return melhor_posicao_enxame.copy(), melhor_pontuacao_enxame, itera
 
-def learn(n_particles, n_weights, n_swarms, max_iter, max_time, chi, c1, c2, w, boundaries, n_samples_train):
+def learn(n_particles, n_weights, n_swarms, max_iter, max_time, boundaries, n_samples_train):
     start = time.process_time()
     itera = 0    
     end = 0
@@ -428,7 +392,7 @@ def learn(n_particles, n_weights, n_swarms, max_iter, max_time, chi, c1, c2, w, 
     # enquanto nao atingiu tempo ou iteracao maxima
     while itera < n_swarms and end-start <= max_time:
         print(" populacao", itera+1)
-        melhor_posicao_enxame, melhor_pontuacao_enxame, iter = pso(manyPlaysResultsTrain, n_particles, n_weights, max_iter, max_time, chi, c1, c2, w, boundaries, n_samples_train, melhor_pontuacao_geral, melhor_posicao_geral)
+        melhor_posicao_enxame, melhor_pontuacao_enxame, iter = pso(manyPlaysResultsTrain, n_particles, n_weights, max_iter, max_time, boundaries, n_samples_train, melhor_pontuacao_geral, melhor_posicao_geral)
         
         if (melhor_pontuacao_enxame > melhor_pontuacao_geral):
             melhor_pontuacao_geral = melhor_pontuacao_enxame
@@ -611,19 +575,11 @@ def main():
     n_swarms = 1
     max_iter = 1000
     max_time = 43200 # 12 horas
-    boundaries = [-12, 12]
+    boundaries = [-1, 1]
     n_samples_train = 10
-    w = 1
-    chi = 0.72984
-    # c1 = 1.49445
-    # c2 = 1.49445
-    c1 = 1.5
-    c2 = 1.5
-    # c1 = 1.2
-    # c2 = 1.2
     
     print("boundaries:",boundaries, " n_samples:",n_samples_train)
-    best_weights, best_value, itera = learn(n_particles= n_particles, n_weights= n_weights, n_swarms= n_swarms, max_iter= max_iter, max_time= max_time, chi= chi, c1= c1, c2= c2,w= w, boundaries= boundaries, n_samples_train= n_samples_train)
+    best_weights, best_value, itera = learn(n_particles, n_weights, n_swarms, max_iter, max_time, boundaries, n_samples_train)
     
     # best_weights = normalize([best_weights], norm="max")
     
